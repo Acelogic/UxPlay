@@ -73,7 +73,7 @@
 #endif
 
 
-#define VERSION "1.73"
+#define VERSION "1.73.6"
 
 #define SECOND_IN_USECS 1000000
 #define SECOND_IN_NSECS 1000000000UL
@@ -194,6 +194,7 @@ static guint playbin_version = DEFAULT_PLAYBIN_VERSION;
 static bool reset_httpd = false;
 static bool monitor_progress = false;
 static uint32_t rtptime = 0;
+static uint32_t rtptime_prev = 0;
 static uint32_t rtptime_start = 0;
 static uint32_t rtptime_end = 0;
 static uint32_t rtptime_coverart_expired = 0;
@@ -224,10 +225,7 @@ static bool dbus_last_message = false;
 static const char *appname = DEFAULT_NAME;
 static const char *reason_always = "mirroring client: inhibit always";
 static const char *reason_active = "actively receiving video";
-static int activity_count;
 static float previous_hls_position = 0.0f;
-static double activity_threshold = 500000.0;  // threshold for FPSdata item txUsageAvg to classify mirror video as "active"
-#define MAX_ACTIVITY_COUNT 60
 #endif
 
 /* logging */
@@ -540,7 +538,7 @@ static gboolean feedback_callback(gpointer loop) {
     if (open_connections) {
         if (missed_feedback_limit && missed_feedback > missed_feedback_limit) {
             LOGI("***ERROR lost connection with client (network problem?)");
-            LOGI("%u missed client feedback signals exceeds limit of %u", missed_feedback, missed_feedback_limit);
+            LOGI("   Interval since last client feedback request exceeds limit of %u seconds", missed_feedback_limit);
             LOGI("   Sometimes the network connection may recover after a longer delay:\n"
                  "   the default limit n = %d seconds, can be changed with the \"-reset n\" option", MISSED_FEEDBACK_LIMIT);
             if (!nofreeze) {
@@ -552,7 +550,7 @@ static gboolean feedback_callback(gpointer loop) {
             g_main_loop_quit((GMainLoop *) loop);
             return TRUE;
         } else if (missed_feedback > 2) {
-            LOGE("%u missed client feedback signals (expected every two seconds); client may be offline", missed_feedback);
+            LOGE("%3u seconds since last client feedback request (expected every two seconds); client may be offline", missed_feedback);
         }
         missed_feedback++;
     } else {
@@ -680,8 +678,9 @@ static void display_progress(uint32_t start, uint32_t curr, uint32_t end) {
 
 static gboolean progress_callback (gpointer loop) {
     if (monitor_progress) {
-        if (rtptime_start || rtptime_end) {
+        if ((rtptime_start || rtptime_end) && rtptime != rtptime_prev ) { //only display if rtptime has changed since last call
             display_progress(rtptime_start, rtptime, rtptime_end);
+            rtptime_prev = rtptime;
         }
         if (render_coverart && coverart_artist == "_expired_" && rtptime - rtptime_coverart_expired > 44100 * 5) {
             /* remove any expired coverart still being rendered more than 5 secs after it expired */ 
@@ -963,7 +962,7 @@ static void print_info (char *name) {
     printf("          v = 2 or 3 (default 3) optionally selects video player version\n");
     printf("-lang xx  HLS language preferences (\"fr:es:..\", overrides $LANGUAGE)\n");
     printf("-lang     (or -lang 0): play undubbed HLS version (overrides $LANGUAGE)\n");
-    printf("-scrsv n  Screensaver override n: 0=off 1=on during activity 2=always on\n");
+    printf("-scrsv n  Screensaver override n: 0=off 1=on while displaying video 2=always on\n");
     printf("-pin[xxxx]Use a 4-digit pin code to control client access (default: no)\n");
     printf("          default pin is random: optionally use fixed pin xxxx\n");
     printf("-reg [fn] Keep a register in $HOME/.uxplay.register to verify returning\n");
@@ -2164,24 +2163,16 @@ static bool check_blocked_client(char *deviceid) {
 
 //to be simplified
 
-static const char *reset_name[] = {
-    [RESET_TYPE_NOHOLD] = "Nohold",
-    [RESET_TYPE_RTP_SHUTDOWN] = "RTP_Shutdown",
-    [RESET_TYPE_HLS_SHUTDOWN] = "HLS_Shutdown",
-    [RESET_TYPE_HLS_EOS] = "HLS_eos",
-    [RESET_TYPE_ON_VIDEO_PLAY] = "on_video_play",
-    [RESET_TYPE_RTP_TO_HLS_TEARDOWN] = "RTP_to_HLS_Shutdown" 
-};
-
 extern "C" void video_reset(void *cls, reset_type_t type) {
-    LOGD("video_reset: type = %s", reset_name[type]);
     switch (type) {
     case RESET_TYPE_NOHOLD:
+        LOGD("video_reset: type = NoHold");
         if (hls_support) {
 	    url.erase();
             raop_destroy_airplay_video(raop, -1);
         }
     case RESET_TYPE_HLS_EOS:
+        LOGD("video_reset: type= HLS_eos");
         if (use_video) {
             video_renderer_stop();
            /* reset the video renderer immediately to avoid a timing issue if we wait for main_loop to reset */ 
@@ -2198,8 +2189,10 @@ extern "C" void video_reset(void *cls, reset_type_t type) {
         relaunch_video = true;
         break;
     case RESET_TYPE_RTP_TO_HLS_TEARDOWN:
+        LOGD("video_reset: type = RTP_to_HLS_Shutdown");
         preserve_connections = true;
     case RESET_TYPE_RTP_SHUTDOWN:
+        LOGD("video_reset: type = RTP_Shutdown");      
         if (use_video) {
             video_renderer_stop();
         }
@@ -2207,6 +2200,7 @@ extern "C" void video_reset(void *cls, reset_type_t type) {
         relaunch_video = true;
         break;
     case RESET_TYPE_HLS_SHUTDOWN:
+        LOGD("video_reset: type = HLS_Shutdown");
         if (use_video) {
             video_renderer_stop();
         }
@@ -2220,6 +2214,7 @@ extern "C" void video_reset(void *cls, reset_type_t type) {
         relaunch_video = true;
         break;
     case RESET_TYPE_ON_VIDEO_PLAY:
+        LOGD("video_reset: type = on_video_play");      
         break;
     default:
         g_assert(FALSE);
@@ -2413,23 +2408,11 @@ extern "C" void video_process (void *cls, raop_ntp_t *ntp, video_decode_struct *
 }
 
 #ifdef DBUS
-extern "C" void mirror_video_activity  (void *cls, double *txusage) {
+extern "C" void mirror_video_running  (void *cls, bool is_running) {
     if (scrsv != 1) {
         return;
     }
-    if (*txusage > activity_threshold) {
-        if (activity_count < MAX_ACTIVITY_COUNT) {
-            activity_count++;
-        } else if (activity_count == MAX_ACTIVITY_COUNT  && !dbus_last_message) {
-	    dbus_screensaver_inhibiter(true);
-        }
-    } else {
-      if (activity_count > 0) {
-          activity_count--;
-      } else if (activity_count == 0 && dbus_last_message) {
-          dbus_screensaver_inhibiter(false);
-      }
-    }
+    dbus_screensaver_inhibiter(is_running);
 }
 #endif
 
@@ -2790,7 +2773,7 @@ static int start_raop_server (unsigned short display[5], unsigned short tcp[3], 
     raop_cbs.video_reset = video_reset;
     raop_cbs.video_set_codec = video_set_codec;
 #ifdef DBUS
-    raop_cbs.mirror_video_activity = mirror_video_activity;
+    raop_cbs.mirror_video_running = mirror_video_running;
 #endif
     raop_cbs.on_video_play = on_video_play;
     raop_cbs.on_video_scrub = on_video_scrub;
@@ -3032,6 +3015,10 @@ int main (int argc, char *argv[]) {
     LOGI("UxPlay %s: An Open-Source AirPlay mirroring and audio-streaming server.", VERSION);
 
 #ifdef DBUS
+    if (scrsv && !use_video) {
+        LOGI ("-scrsv = %d will be ignored, as no video will be rendered", scrsv);
+        scrsv = 0;
+    }
     if (scrsv) {
         DBusError dbus_error;
         dbus_error_init(&dbus_error);
@@ -3071,7 +3058,7 @@ int main (int argc, char *argv[]) {
         }
 
         LOGI("Will attempt to use %s (D-Bus screensaver inhibition) %s", dbus_service.c_str(),
-             (scrsv == 1 ? "only during screen activity" : "always"));
+             (scrsv == 1 ? "while displaying mirrored or streamed video" : "always"));
         if (scrsv == 2) {
             dbus_screensaver_inhibiter(true);
         }

@@ -266,15 +266,15 @@ const char *get_playback_location(airplay_video_t *airplay_video) {
 }
 
 const char *get_uri_prefix(airplay_video_t *airplay_video) {
-  return (const char *) airplay_video->uri_prefix;
+    return (const char *) airplay_video->uri_prefix;
 }
 
 const char *get_language_name(airplay_video_t *airplay_video) {
-  return (const char *)airplay_video->language_name;
+    return (const char *)airplay_video->language_name;
 }
 
 const char *get_language_code(airplay_video_t *airplay_video) {
-  return (const char *) airplay_video->language_code;
+    return (const char *) airplay_video->language_code;
 }
 
 char *get_uri_local_prefix(airplay_video_t *airplay_video) {
@@ -334,8 +334,8 @@ language_t* master_playlist_process_language(const char * data, int *slices, int
     size_t length = 0;
     ptr = data;
     for (int i = 1; i <= count; i++) {
-        char *end;
-	int len_name;
+        const char *end;
+        int len_name;
         if (!(ptr = strstr(ptr, "#EXT-X-MEDIA"))) {
             break;
         }
@@ -348,23 +348,23 @@ language_t* master_playlist_process_language(const char * data, int *slices, int
         }
         languages[i].start = ptr;
 
-	if (!(ptr = strstr(ptr, "DEFAULT="))) {
+	    if (!(ptr = strstr(ptr, "DEFAULT="))) {
             break;
         }
-	ptr += strlen("DEFAULT=");
-	languages[i].is_default = !strncmp(ptr, "YES", strlen("YES"));
-	if (!(ptr = strstr(ptr, "NAME="))) {
+	    ptr += strlen("DEFAULT=");
+	    languages[i].is_default = !strncmp(ptr, "YES", strlen("YES"));
+	    if (!(ptr = strstr(ptr, "NAME="))) {
             break;
         }
-	ptr += strlen("NAME=");
-	end = strchr(++ptr,'"');
-	if (!end) {
+	    ptr += strlen("NAME=");
+	    end = strchr(++ptr,'"');
+	    if (!end) {
             break;
         }
-	len_name = end - ptr;
-	languages[i].name = (char *) calloc(len_name + 1, sizeof(char));
-	memcpy(languages[i].name, ptr, len_name *sizeof(char));
-	if (!(ptr = strstr(ptr, "LANGUAGE="))) {
+	    len_name = end - ptr;
+	    languages[i].name = (char *) calloc(len_name + 1, sizeof(char));
+	    memcpy(languages[i].name, ptr, len_name *sizeof(char));
+	    if (!(ptr = strstr(ptr, "LANGUAGE="))) {
             break;
         }
         if (!(ptr = strchr(ptr,'"'))) {
@@ -379,7 +379,7 @@ language_t* master_playlist_process_language(const char * data, int *slices, int
         }
         count1++;
         languages[i].len = (int) (ptr + 1 - languages[i].start);
-	length += languages[i].len;
+	    length += languages[i].len;
     }
     assert (count1 == count);
     
@@ -692,14 +692,14 @@ int analyze_media_playlist(char *playlist, float *duration, bool *endlist) {
 /* parse Master Playlist, make table of Media Playlist uri's that it lists */
 int create_media_uri_table(const char *url_prefix, const char *master_playlist_data,
                            int datalen, char ***media_uri_table, int *num_uri) {
-    char *ptr = strstr(master_playlist_data, url_prefix);
+    const char *ptr = strstr(master_playlist_data, url_prefix);
     char ** table = NULL;
     if (ptr == NULL) {
         return -1;
     }
     int count = 0;
     while (ptr != NULL) {
-        char *end = strstr(ptr, "m3u8");
+        const char *end = strstr(ptr, "m3u8");
         if (end == NULL) {
             return 1;
         }
@@ -717,23 +717,23 @@ int create_media_uri_table(const char *url_prefix, const char *master_playlist_d
     ptr = strstr(master_playlist_data, url_prefix);
     count = 0;
     while (ptr != NULL) {
-        char *end = strstr(ptr, "m3u8");
-	char *uri;
+        const char *end = strstr(ptr, "m3u8");
+        char *uri;
         if (end == NULL) {
             return 0;
         }
         end += sizeof("m3u8");
         size_t len = end - ptr - 1;
-	uri  = (char *) calloc(len + 1, sizeof(char));
+	    uri  = (char *) calloc(len + 1, sizeof(char));
         if (!uri) {
             printf("Memory allocation failure (uri)\n");
             exit(1);
         }
-	memcpy(uri , ptr, len);
+	    memcpy(uri , ptr, len);
         table[count] = uri;
         uri =  NULL;	
-	count ++;
-	ptr = strstr(end, url_prefix);
+	    count ++;
+	    ptr = strstr(end, url_prefix);
     }
     *num_uri = count;
 
@@ -851,7 +851,7 @@ char *adjust_yt_condensed_playlist(const char *media_playlist) {
     const char **params_start = NULL;
     if (strlen(params)) {
         nparams = 1;
-        char * comma = strchr(params, ',');
+        const char * comma = strchr(params, ',');
         while (comma) {
             nparams++;
             comma++;
@@ -909,7 +909,7 @@ char *adjust_yt_condensed_playlist(const char *media_playlist) {
     while (ptr) {
         /* for each chunk */
         const char *end = NULL;
-        char *start = strstr(ptr, prefix);
+        const char *start = strstr(ptr, prefix);
         len = start - ptr;
         /* copy first line of chunk entry */
         memcpy(new_pos, old_pos, len);
@@ -917,7 +917,7 @@ char *adjust_yt_condensed_playlist(const char *media_playlist) {
         old_pos += len;
         new_pos += len;
 	
-	/* copy base uri  to replace prefix*/
+	    /* copy base uri  to replace prefix*/
         memcpy(new_pos, base_uri, base_uri_len);
         byte_count += base_uri_len;
         new_pos += base_uri_len;
@@ -933,7 +933,7 @@ char *adjust_yt_condensed_playlist(const char *media_playlist) {
             } else {
                 /* the next line starts with either #EXTINF (usually) 
                 or #EXT-X-ENDLIST (at last chunk)*/
-	        end = strstr(end, "#EXT");
+	            end = strstr(end, "#EXT");
             }
             *new_pos = '/';
             byte_count++;
