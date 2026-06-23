@@ -63,7 +63,6 @@
 #include "lib/raop.h"
 #include "lib/stream.h"
 #include "lib/logger.h"
-#include "lib/dnssd.h"
 #include "lib/crypto.h"
 #include "renderers/video_renderer.h"
 #include "renderers/audio_renderer.h"
@@ -73,7 +72,7 @@
 #endif
 
 
-#define VERSION "1.73.6"
+#define VERSION "1.74"
 
 #define SECOND_IN_USECS 1000000
 #define SECOND_IN_NSECS 1000000000UL
@@ -92,7 +91,8 @@
   #define DEFAULT_SRGB_FIX false
 #endif
 
-static std::string server_name = DEFAULT_NAME;
+static const char *appname = DEFAULT_NAME;
+static std::string server_name = appname;
 static bool server_name_is_utf8 = false;
 static dnssd_t *dnssd = NULL;
 static raop_t *raop = NULL;
@@ -222,7 +222,6 @@ static DBusConnection *dbus_connection = NULL;
 static dbus_uint32_t dbus_cookie = 0;
 static DBusPendingCall *dbus_pending = NULL;
 static bool dbus_last_message = false;
-static const char *appname = DEFAULT_NAME;
 static const char *reason_always = "mirroring client: inhibit always";
 static const char *reason_active = "actively receiving video";
 static float previous_hls_position = 0.0f;
@@ -1169,24 +1168,27 @@ static bool get_videorotate (const char *str, videoflip_t *videoflip) {
 }
 
 static void append_hostname(std::string &server_name) {
+    std::string hostname;
 #ifdef _WIN32   /*modification for compilation on Windows */
     char buffer[256] = "";
     unsigned long size = sizeof(buffer);
     if (GetComputerNameA(buffer, &size)) {
-        std::string name = server_name;
-        name.append("@");
-        name.append(buffer);
-        server_name = name;
+        hostname.append(buffer);
     }
 #else
     struct utsname buf;
     if (!uname(&buf)) {
-        std::string name = server_name;
-        name.append("@");
-        name.append(buf.nodename);
-        server_name = name;
+        hostname.append(buf.nodename);
     }
 #endif
+    /* remove any ".local" suffix (causes namespace problem on macOS when using a custom mDNSResponder)*/
+    std::string dot_local = ".local";
+    size_t pos = hostname.find(dot_local);
+    if (pos != std::string::npos) {
+        hostname.erase(pos);
+    }
+    server_name.append("@");
+    server_name.append(hostname);
 }
 
 bool is_utf8(const char *string, bool *is_printable_ascii) {
@@ -1960,23 +1962,14 @@ static int parse_dmap_header(const unsigned char *metadata, char *tag, int *len)
 
 static int register_dnssd() {
     int dnssd_error;
+    int dnssd_type = 0;
     uint64_t features;
     
     dnssd_error = dnssd_register_raop(dnssd, raop_port);
     if (dnssd_error) {
         if (ble_filename.empty()) {
-            if (dnssd_error == -65537) {
-                LOGE("No DNS-SD Server found (DNSServiceRegister call returned kDNSServiceErr_Unknown)");
-            } else if (dnssd_error == -65548) {
-                LOGE("DNSServiceRegister call returned kDNSServiceErr_NameConflict");
-                LOGI("Is another instance of %s running with the same DeviceID (MAC address) or using same network ports?",
-                     DEFAULT_NAME);
-                LOGI("Use options -m ... and -p ... to allow multiple instances of %s to run concurrently", DEFAULT_NAME); 
-            } else {
-                LOGE("dnssd_register_raop failed with error code %d\n"
-                     "mDNS Error codes are in range FFFE FF00 (-65792) to FFFE FFFF (-65537) "
-                     "(see Apple's dns_sd.h)", dnssd_error);
-            }
+            LOGE("dnssd_register_raop failed with error code %d", dnssd_error);
+            dnssd_error_text(&dnssd_error, appname);
             return -3;
         } else {
             LOGI("dnssd_register_raop failed: ignoring because Bluetooth LE service discovery may be available");
@@ -1986,9 +1979,8 @@ static int register_dnssd() {
     dnssd_error = dnssd_register_airplay(dnssd, airplay_port);
     if (dnssd_error) {
         if (ble_filename.empty()) {
-            LOGE("dnssd_register_airplay failed with error code %d\n"
-                 "mDNS Error codes are in range FFFE FF00 (-65792) to FFFE FFFF (-65537) "
-                 "(see Apple's dns_sd.h)", dnssd_error);
+            LOGE("dnssd_register_airplay failed with error code %d", dnssd_error);
+            dnssd_error_text(&dnssd_error, appname);
             return -4;
         } else {
             LOGI("dnssd_register_airplay failed: ignoring because Bluetooth LE service discovery may be available");   
@@ -2029,7 +2021,7 @@ static int start_dnssd(std::vector<char> hw_addr, std::string name) {
               = 3: client must enter randoe 4-digit password displayed like an  onscreen pin (every access)
               = 0:  no access control
     */
-    dnssd = dnssd_init(name.c_str(), strlen(name.c_str()), hw_addr.data(), hw_addr.size(), &dnssd_error, pin_pw);
+    dnssd = dnssd_init(name.c_str(), strlen(name.c_str()), hw_addr.data(), hw_addr.size(), pin_pw, &dnssd_error);
     if (dnssd_error) {
         LOGE("Could not initialize dnssd library!: error %d", dnssd_error);
         return 1;

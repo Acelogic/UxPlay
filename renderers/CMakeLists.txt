@@ -47,6 +47,12 @@ if ( X11_FOUND )
   endif()
 endif()
 
+pkg_check_modules(GLIB2 REQUIRED glib-2.0)
+if (${GLIB2_VERSION} VERSION_LESS "2.68")
+   message(STATUS "GLib2 < 2.68: Need a replacement for g_string_replace")
+   add_definitions( -DNEED_G_STRING_REPLACE )   
+endif()
+
 pkg_check_modules(GST REQUIRED    gstreamer-1.0>=1.4
                                   gstreamer-sdp-1.0>=1.4
                                   gstreamer-video-1.0>=1.4
@@ -127,6 +133,5 @@ elseif( CMAKE_VERSION VERSION_LESS "3.12" )
 else()		  
   target_link_libraries( renderers PUBLIC ${GST_LINK_LIBRARIES} )
 endif()
-
 
 

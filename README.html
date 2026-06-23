@@ -1,13 +1,24 @@
 <h1
-id="uxplay-1.73-airplay-mirror-and-airplay-audio-server-for-linux-macos-and-unix-also-runs-on-windows.">UxPlay
-1.73: AirPlay-Mirror and AirPlay-Audio server for Linux, macOS, and Unix
-(also runs on Windows).</h1>
+id="uxplay-1.74-experimental-airplay-mirror-and-airplay-audio-server-for-linux-macos-and-unix-also-runs-on-windows.">UxPlay
+1.74 (Experimental): AirPlay-Mirror and AirPlay-Audio server for Linux,
+macOS, and Unix (also runs on Windows).</h1>
 <h3
 id="now-developed-at-the-github-site-httpsgithub.comfdh2uxplay-where-all-user-issues-should-be-posted-and-latest-versions-can-be-found."><strong>Now
 developed at the GitHub site <a href="https://github.com/FDH2/UxPlay"
 class="uri">https://github.com/FDH2/UxPlay</a> (where ALL user issues
 should be posted, and latest versions can be found).</strong></h3>
 <ul>
+<li><p>**NEW in v 1.74 (Experimental) (June 2026)</p>
+<p><strong>This is a trial of a future release with new contributed code
+that provides a minimal internal mDNSResponder implemention that removes
+dependence on avahi (linux) or Apple’s Bonjour (Windows and macOS). The
+previous implementation based on Apple’s dns_sd.h is still available by
+compiling UxPlay using <code>cmake -DUSE_DNS_SD=1</code></strong></p>
+<p><em>Comments about issues with this new internal mdns implementation,
+and whether it should become the default (with the external
+Avahi/Bonjour implementation remaining as an alternative build option),
+or vice versa, are extremely welcome.</em> (Issue <a
+href="https://github.com/FDH2/UxPlay/issues/529">#529</a></p></li>
 <li><p><strong>NEW in v1.73, up to v1.73.6</strong> (March
 2026):</p></li>
 <li><p>Some YouTube app HLS videos now offer alternative language tracks
@@ -50,7 +61,7 @@ pipelines.</p></li>
 <li><p>(for Linux/*BSD Desktop Environments using D-Bus). New option
 <code>-scrsv &lt;n&gt;</code> provides screensaver inhibition (e.g., to
 prevent screensaver function while watching mirrored videos without
-keyboard or mouse activity): n = 0 (off) n=1 (on while streaming video)
+keyboard or mouse activity): n = 0 (off) n=1 (on during video activity)
 n=2 (always on while UxPlay is running). Tested on
 Gnome/KDE/Cinnamon/Mate/Xfce 4: may need adjustment for other Desktop
 Environments (please report). (watch output of <code>dbus-monitor</code>
@@ -856,10 +867,17 @@ class="uri">https://gstreamer.freedesktop.org/download/</a>. (This
 release contains its own pkg-config, so you don’t have to install one.)
 Install both the gstreamer-1.0 and gstreamer-1.0-devel packages. After
 downloading, Shift-Click on them to install (they install to
-/Library/FrameWorks/GStreamer.framework). Homebrew or MacPorts users
-should <strong>not</strong> install (or should uninstall) the GStreamer
-supplied by their package manager, if they use the “official”
-release.</p>
+/Library/FrameWorks/GStreamer.framework).</p>
+<ul>
+<li><strong>Because GStreamer packages are unsigned, recent macOS will
+reject your initial attempt to install them with “Shift-Click”: you then
+have to go to System Settings-&gt;Privacy &amp; Security-&gt;Security
+and click on “Open Anyway” to proceed with the
+installation.</strong></li>
+</ul>
+<p>Homebrew or MacPorts users should <strong>not</strong> install (or
+should uninstall) the GStreamer supplied by their package manager, if
+they use the “official” release.</p>
 <ul>
 <li>Since GStreamer v1.22, the “Official” (gstreamer.freedesktop.org)
 macOS binaries require a wrapper “gst_macos_main” around the actual main
@@ -920,6 +938,14 @@ needed.</p></li>
 <li><p>In the case of glimagesink, the resolution settings “-s wxh” may
 not affect the (small) initial OpenGL mirror window size, but the window
 can be expanded using the mouse or trackpad.</p></li>
+<li><p>With <code>-vs osxvideosink</code>, the image expands to fill the
+window, not preserving the image’s aspect ratio. You may wish to use
+<code>-vs "osxvideosink force-aspect-ratio=true"</code> to maintain the
+original aspect ratio.</p></li>
+<li><p><em>On older releases of GStreamer, there were issues involving
+windows not closing properly, that required the UxPlay option “-nc”:
+these issues in GStreamer seem fixed now, but if you experience them,
+try using “-nc”.</em></p></li>
 </ul>
 <p>Unfortunately, it seems that the macOS Bluetooth stack does not allow
 users to broadcast Bluetooth LE advertisements of the type needed for
@@ -1934,6 +1960,19 @@ when the client sends the “Stop Mirroring” signal, try the no-close
 option “-nc” that leaves the video window open.</p>
 <h3 id="gstreamer-issues-missing-plugins-etc.">4. GStreamer issues
 (missing plugins, etc.):</h3>
+<p>If UxPlay issues no error messages, but GStreamer video seems not to
+be working, test your GStreamer installation inside a terminal window
+with</p>
+<pre><code>gst-launch-1.0 videotestsrc ! autovideosink
+</code></pre>
+<p>If autovideosink finds a working videosink, a video test pattern
+should be displayed. Then test the various videosinks (see the -vs entry
+in <code>man uxplay</code> for a list) to see which work on your system.
+Also use</p>
+<pre><code>gst-inspect-1.0 | grep sink | grep [V,v]ideo</code></pre>
+<p>to see which videosinks GStreamer believes are installed. Repeat the
+gst-launch-1.0 command, replacing “autovideosink” by the name of each
+videosink you wish to test.</p>
 <ul>
 <li>clearing the user’s GStreamer cache with
 <code>rm -rf ~/.cache/gstreamer-1.0/*</code> may be the solution to
@@ -2065,6 +2104,8 @@ an AppleTV6,2 with sourceVersion 380.20.1 (an AppleTV 4K 1st gen,
 introduced 2017, running tvOS 12.2.1), so it does not seem to matter
 what version UxPlay claims to be.</p>
 <h1 id="changelog">Changelog</h1>
+<p>1.74 2026-06-21 Optional minimal internal mDNSResponder to replace
+Bonjour/Avahi</p>
 <p>1.73.6 2026-03-22 Fix “not a socket” message uxplay bug. Futher
 uxplay-beacon.py improvements (Only use GLib in BlueZ module)</p>
 <p>1.73.4 2026-03-15 Modularize Bluetooth support for uxplay-beacon. Add

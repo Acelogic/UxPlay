@@ -1,6 +1,21 @@
-# UxPlay 1.73: AirPlay-Mirror and AirPlay-Audio server for Linux, macOS, and Unix (also runs on Windows).
+# UxPlay 1.74 (Experimental): AirPlay-Mirror and AirPlay-Audio server for Linux, macOS, and Unix (also runs on Windows).
 
 ### **Now developed at the GitHub site <https://github.com/FDH2/UxPlay> (where ALL user issues should be posted, and latest versions can be found).**
+
+-   **NEW in v 1.74 (Experimental) (June 2026)
+
+     **This is a trial of a future release with new contributed code that provides
+     a minimal internal mDNSResponder implemention that removes dependence
+     on avahi (linux) or Apple's Bonjour (Windows and macOS).  The previous
+     implementation based on Apple's dns_sd.h is still available by compiling
+     UxPlay using `cmake -DUSE_DNS_SD=1`**
+
+     *Comments about issues with this new internal mdns implementation, and
+     whether it should become the default (with the external Avahi/Bonjour
+     implementation remaining as an alternative build option), or vice versa,
+     are extremely welcome.*  (Issue [#529](https://github.com/FDH2/UxPlay/issues/529)
+
+
 
 -  **NEW in v1.73, up to  v1.73.6** (March 2026):
 
@@ -843,7 +858,14 @@ users)**: install the GStreamer release for macOS from
 its own pkg-config, so you don't have to install one.) Install both the
 gstreamer-1.0 and gstreamer-1.0-devel packages. After downloading,
 Shift-Click on them to install (they install to
-/Library/FrameWorks/GStreamer.framework). Homebrew or MacPorts users
+/Library/FrameWorks/GStreamer.framework).
+
+* **Because GStreamer packages are unsigned, recent macOS will reject your
+initial attempt to install them with "Shift-Click":
+you then have to go to System Settings->Privacy & Security->Security  and
+click on "Open Anyway" to proceed with the installation.**
+
+Homebrew or MacPorts users
 should **not** install (or should uninstall) the GStreamer supplied by
 their package manager, if they use the "official" release.
 
@@ -911,6 +933,11 @@ downloads, "UxPlay" for "git clone" downloads) and build/install with
 -   In the case of glimagesink, the resolution settings "-s wxh" may not
     affect the (small) initial OpenGL mirror window size, but the window
     can be expanded using the mouse or trackpad.
+
+-   With `-vs osxvideosink`, the image expands to fill the window, not preserving the
+    image's aspect ratio. You may
+    wish to use `-vs "osxvideosink force-aspect-ratio=true"` to maintain the
+    original aspect ratio.
 
 -   **Experimental: Native macOS Renderer** - For potentially lower latency,
     you can build UxPlay with a native macOS video renderer that uses
@@ -1926,6 +1953,25 @@ option "-nc" that leaves the video window open.
 
 ### 4. GStreamer issues (missing plugins, etc.):
 
+If UxPlay issues no error messages, but GStreamer video seems not to be working,
+test your GStreamer installation inside a terminal window with
+
+```
+gst-launch-1.0 videotestsrc ! autovideosink
+
+```
+If autovideosink finds a working videosink, a video test pattern should be displayed.
+Then test the various videosinks (see the -vs entry in `man uxplay` for a list) to see
+which work on your system.  Also use
+
+```
+gst-inspect-1.0 | grep sink | grep [V,v]ideo
+```
+
+to see which videosinks GStreamer believes are installed.   Repeat the gst-launch-1.0 command,
+replacing "autovideosink" by the name of each videosink you wish to test.
+
+
 -   clearing the user's GStreamer cache with
     `rm -rf ~/.cache/gstreamer-1.0/*` may be the solution to problems
     where gst-inspect-1.0 does not show a plugin that you believe is
@@ -2063,6 +2109,9 @@ introduced 2017, running tvOS 12.2.1), so it does not seem to matter
 what version UxPlay claims to be.
 
 # Changelog
+1.74  2026-06-21  Optional minimal internal mDNSResponder to replace
+Bonjour/Avahi
+
 1.73.6 2026-03-22  Fix "not a socket" message uxplay bug.
 Futher uxplay-beacon.py improvements (Only use GLib in BlueZ module)
 
