@@ -2031,12 +2031,7 @@ static void create_window(const char *title) {
                     mach_timebase_info(&timebase);
                     double elapsed = (double)(mach_absolute_time() - g_last_frame_time) * timebase.numer / timebase.denom / 1e9;
                     if (elapsed > FRAME_STALL_TIMEOUT) {
-                        pthread_mutex_lock(&g_frame_mutex);
-                        if (g_pending_frame) {
-                            CVPixelBufferRelease(g_pending_frame);
-                            g_pending_frame = NULL;
-                        }
-                        pthread_mutex_unlock(&g_frame_mutex);
+                        video_renderer_stop();
                         g_last_frame_time = 0;
                         update_window_title("Ready");
                         uint64_t now = mach_absolute_time();
